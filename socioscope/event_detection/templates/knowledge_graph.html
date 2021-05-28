@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h1>Knowledge Graph</h1>
+    </div>
+</div>
+
+{% load crispy_forms_tags %}
+
+<div class="row mt-2">
+    <div class="col-md-12">
+        <form method="POST" id="search-form" class="post-form" novalidate>
+            {% csrf_token %}
+            {{ form|crispy }}
+            <button type="submit" id="btn-submit" class="btn btn-success">
+                Search
+            </button>
+        </form>
+    </div>
+</div>
+
+{% if plot_div %}
+<h3>Knowledge Graph:</h3>
+<br />
+<div class="row">
+    <!-- <div class="col-md-2">
+        
+    </div> -->
+
+    <div class="col-md-12">
+        <!-- {% autoescape off %} -->
+        {{ plot_div|safe }}
+        <!-- {% endautoescape %} -->
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

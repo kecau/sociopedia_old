@@ -1,0 +1,151 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<head>
+    <!-- XDSoft DateTimePicker -->
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/jquery-datetimepicker/2.5.20/jquery.datetimepicker.min.css"
+        integrity="sha256-DOS9W6NR+NFe1fUhEE0PGKY/fubbUCnOfTje2JMDw3Y=" crossorigin="anonymous" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-datetimepicker/2.5.20/jquery.datetimepicker.full.min.js"
+        integrity="sha256-FEqEelWI3WouFOo2VWP/uJfs1y8KJ++FLh2Lbqc8SJk=" crossorigin="anonymous"></script>
+        
+    <script>
+        $(document).ready(function() {
+            $("#id_end_date").datetimepicker({
+                format: 'Y-m-d H:i',
+                minDate:'{{min_date}}',
+                maxDate:'{{max_date}}'
+            });
+            $("#search-button").prop("disabled", true);
+        });
+
+        function checkToken() {
+            var selected_token = $("#id_token_selection").val();
+            
+            if (selected_token > 0){
+                $("#search-button").prop("disabled", false);
+
+                $.ajax({
+                    type: 'POST',
+                    url: "{% url 'token_streaming_count_check' %}",
+                    data: {
+                        "token_id": selected_token,
+                    },
+                    success: function (response) {
+                        var streaming_count = response["streaming_count"];
+                        
+                        if (streaming_count > 0){
+                            $("#exampleModal").modal('show');
+                        }
+                    },
+                    error: function (response) {
+                        alert(response["responseJSON"]["error"]);
+                    }
+                });
+            } else{
+                $("#search-button").prop("disabled", true);
+            }
+
+        }
+ 
+    </script>
+</head>
+
+<div class="font-up-bold text-uppercase">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item active" aria-current="page">
+                <h5 class="mr-3 mb-0"><strong>Twitter Crawler</strong></h5>
+            </li>
+        </ol>
+    </nav>
+</div>
+
+<!-- Modal -->
+<div class="modal fade" id="exampleModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exampleModalLabel">Token</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+
+                There is another streaming task is using this token. Using one token for streaming more than one task
+                can lead to error. Please select another token, or create your own token to use.
+                <br><br>
+                <ul>
+                    <li>
+                        Please refer to this link to know how to make your Twitter token: <a
+                            href="https://developer.twitter.com/en/docs/getting-started" target="_blank">Twitter API
+                            Doc</a>
+                    </li>
+                    <li>
+                        Then you can add and manage your tokens here: <a href="{% url 'token_management'%}">Manage your
+                            tokens</a>
+                    </li>
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% load crispy_forms_tags %}
+
+<div class="row mt-2">
+    <div class="col-md-12">
+        <form method="POST" id="search-form" class="post-form" novalidate>
+            {% csrf_token %}
+            {{ form|crispy }}
+            <button id="search-button" type="submit" class="btn btn-primary">Start Crawling</button>
+        </form>
+    </div>
+</div>
+
+
+{% if is_error %}
+<br>
+<div>
+    <h4>Streaming Error:</h4>
+    <p>There is not enough token for streaming data from Twitter. Please wait until there is a token available.</p>
+</div>
+
+{% else %}
+
+{% if keyword_obj_list %}
+<br>
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th scope="col">Number</th>
+            <th scope="col">Keyword</th>
+            <th scope="col">Start date</th>
+            <th scope="col">End date</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for keyword in keyword_obj_list %}
+        <tr>
+            <th scope="row">{{ forloop.counter }}</th>
+            <td>{{ keyword.keyword }}</td>
+            <td>{{ keyword.search_date }}</td>
+            <td>{{ keyword.end_date }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<div>
+    <a class="btn btn-primary" role="button" href="{% url 'system_management'%}">Manage Keywords</a>
+</div>
+{% endif %}
+{% endif %}
+
+{% endblock %}

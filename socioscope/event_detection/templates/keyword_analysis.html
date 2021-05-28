@@ -1,0 +1,276 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<head>
+    <script
+        type="text/javascript"
+        src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js">
+    </script>
+
+    <style type="text/css">
+        #knowledge-graph {
+        width: 100%;
+        height: 700px;
+        border: 1px solid lightgray;
+        }
+    </style>
+
+    <script>
+        $(document).ready(function () {
+            function analyse(analyse_type) {
+                $.ajax({
+                    type: 'POST',
+                    url: "{% url 'analyse' %}",
+                    data: {
+                        "analyse_type": analyse_type,
+                        "id": "{{keyword_id}}",
+                        "start_date": "{{start_date}}",
+                        "end_date": "{{end_date}}"
+                    },
+                    success: function (response) {
+                        if (analyse_type == "wordcloud") {
+                            var img_url = "{% static 'wordcloud' %}".replace(/wordcloud/, response["wordcloud"]);
+                            $("div#analysis-div").html("<img src='" + img_url + "'/>");
+
+                        } else if (analyse_type == "n-grams") {
+                            one_gram_plot_div = response["one-grams"];
+                            two_gram_plot_div = response["two-grams"];
+                            thr_gram_plot_div = response["thr-grams"];
+                            
+                            $("div#analysis-div").html(one_gram_plot_div + two_gram_plot_div + thr_gram_plot_div);
+
+                        } else if (analyse_type == "knowledgegraph") {
+                            var knowledge_graph_dict = response["knowledgegraph"];
+                            $("div#analysis-div").html('');
+                            $("div#analysis-div").append('<div id="knowledge-graph"></div>')
+                            
+                            var node_list = [];
+                            var edge_list = [];
+                            var added_node = [];
+                            var added_edge = [];
+
+                            for (var key in knowledge_graph_dict){
+                                for (var i = 0; i < knowledge_graph_dict[key][1].length; i++){
+                                    triple = knowledge_graph_dict[key][1][i];
+                                    
+                                    if (!added_node.includes(triple[0])){
+                                        added_node.push(triple[0]);
+                                        node_list.push({id: triple[0], label: triple[0], shape: "box"});
+                                    }
+                                    if (!added_node.includes(triple[2])){
+                                        added_node.push(triple[2]);
+                                        node_list.push({id: triple[2], label: triple[2], shape: "box"});
+                                    }
+                                    
+                                    if (!added_edge.includes(triple[0] + " - " + triple[2])){
+                                        added_edge.push(triple[0] + " - " + triple[2]);
+                                        edge_list.push({ from: triple[0], to: triple[2], label: triple[1], arrows: "to"});
+                                    }
+                                }
+                            }
+
+                            // create an array with nodes
+                            var nodes = new vis.DataSet(node_list);
+
+                            // create an array with edges
+                            var edges = new vis.DataSet(edge_list);
+
+                            // create a network
+                            var container = document.getElementById("knowledge-graph");
+                            var data = {
+                                nodes: nodes,
+                                edges: edges,
+                            };
+                            var options = {};
+                            var network = new vis.Network(container, data, options);
+                            
+
+                            $("div#analysis-div").append(`
+                                <table class="table" id="tweet-table">
+                                    <thead class="thead-dark">
+                                        <tr>
+                                            <th scope="col">ID</th>
+                                            <th scope="col">Tweet</th>
+                                            <th scope="col">Subject</th>
+                                            <th scope="col">Predicate</th>
+                                            <th scope="col">Object</th>
+                                            <th scope="col">Time</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    </tbody>
+                                </table>
+                            `);
+                            
+                            $.each(knowledge_graph_dict, function(key, val) {
+                                for(var i = 0; i < val[1].length; i++) {
+                                    $("#tweet-table tbody").append(
+                                        '<tr>' +
+                                            '<th scope="row">' + key + '</th>' +
+                                            '<td style="word-wrap: break-word">' + val[0] + '</td>' +
+                                            '<td><button type="button" class="btn btn-light entity" id="' + val[1][i][3] + '" data-toggle="modal" data-target="#exampleModal">' + val[1][i][0] + '</button></td>' +
+                                            '<td>' + val[1][i][1] + '</td>' +
+                                            '<td><button type="button" class="btn btn-light entity" id="' + val[1][i][4] + '" data-toggle="modal" data-target="#exampleModal">' + val[1][i][2] + '</button></td>' +
+                                            '<td>' + val[2] + '</td>' +
+                                        '</tr>'
+                                    );
+                                }
+                            });
+                        }
+                        
+                    },
+                    error: function (response) {
+                        alert(response["responseJSON"]["error"]);
+                    }
+                });
+            }
+
+            function reset_loading(button) {
+                $(".btn-group > .btn").removeClass("active");
+                $(button).addClass("active");
+
+                $("div#analysis-div").html(`
+                    <div class="d-flex justify-content-center">
+                        <div class="spinner-border" style="width: 100px; height: 100px;">
+                            <span class="sr-only">Loading...</span>
+                        </div>
+                    </div>
+                `);
+            }
+            
+            analyse("wordcloud");
+            $("button#btn-wordcloud").click(function(){
+                reset_loading(this);
+                analyse("wordcloud");
+            });
+            
+            $("button#btn-ngrams").click(function() {
+                reset_loading(this);
+                analyse("n-grams");
+            });
+
+            $("button#btn-knowledgegraph").click(function() {
+                reset_loading(this);
+                analyse("knowledgegraph");
+            });
+
+            $('body').on('click', 'button.entity', function(e) {
+                var entity = $(this).text();
+                var type = $(this).attr('id');
+                
+                $("h5#exampleModalLabel").text(entity);
+                $("div#model-body").html(`
+                    <div class="d-flex justify-content-center">
+                        <div class="spinner-border" style="width: 40px; height: 40px;">
+                            <span class="sr-only">Loading...</span>
+                        </div>
+                    </div>
+                `);
+                
+                $.ajax({
+                    type: 'POST',
+                    url: "{% url 'link_entity_dbpedia' %}",
+                    data: {
+                        "entity": entity,
+                        "type": type,
+                    },
+                    success: function (response) {
+                        if (Object.keys(response["dbpedia_entity"]).length == 0){
+                            $("div#model-body").html('<h6>Cannot find out any similar entity in DBpedia</h6>');
+                        } else {
+                            $("div#model-body").html('');
+                            $("div#model-body").append(`
+                                <table class="table" id="tweet-table">
+                                    <thead class="thead-dark">
+                                        <tr>
+                                            <th scope="col">Entity Name</th>
+                                            <th scope="col">Entity Link</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    </tbody>
+                                </table>
+                            `);
+
+                            $.each(response["dbpedia_entity"], function (key, val) {
+
+                                $("div#model-body tbody").append(
+                                    '<tr>' +
+                                        '<th scope="row">' + val + '</th>' +
+                                        '<td><a target="_blank" rel="noopener noreferrer" href="' + key + '">View on DBpedia</a></td>' +
+                                    '</tr>'
+                                );
+                            });
+
+                        }
+                    },
+                    error: function (response) {
+                        alert(response["responseJSON"]["error"]);
+                    }
+                });
+            });
+
+        });
+    </script>
+</head>
+
+<div class="font-up-bold text-uppercase">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item">
+                <a class="" href="{% url 'system_management'%}">
+                    <h5 class="mr-3 mb-0"><strong>Keyword Management</strong></h5>
+                </a>
+            </li>
+            <li class="breadcrumb-item">
+                <a class="" href="{% url 'view_tweets' pk=keyword_id %}">
+                    <h5 class="mr-3 mb-0"><strong>View Tweets</strong></h5>
+                </a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">
+                <h5 class="mr-3 mb-0"><strong>Tweets Analysis</strong></h5>
+            </li>
+        </ol>
+    </nav>
+</div>
+
+<div class="btn-group" role="group" aria-label="Basic example">
+    <button type="button" id="btn-wordcloud" class="btn btn-outline-secondary active">Wordcloud</button>
+    <button type="button" id="btn-ngrams" class="btn btn-outline-secondary">N-grams</button>
+    <button type="button" id="btn-knowledgegraph" class="btn btn-outline-secondary">KnowledgeGraph</button>
+</div>
+
+<div id="analysis-div">
+    <div class="d-flex justify-content-center">
+        <div class="spinner-border" style="width: 100px; height: 100px;">
+            <span class="sr-only">Loading...</span>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="exampleModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exampleModalLabel">Entity linking</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body" id="model-body">
+                <div class="d-flex justify-content-center">
+                    <div class="spinner-border" style="width: 40px; height: 40px;">
+                        <span class="sr-only">Loading...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

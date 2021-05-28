@@ -1,0 +1,286 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<head>
+    <script
+        type="text/javascript"
+        src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js">
+    </script>
+
+    <style type="text/css">
+        #knowledge-graph {
+        width: 100%;
+        height: 700px;
+        border: 1px solid lightgray;
+        }
+    </style>
+
+    <script>
+        $(document).ready(function () {
+            var knowledge_graph_dict;
+            function analyse(analyse_type) {
+                $.ajax({
+                    type: 'POST',
+                    url: "{% url 'event_knowledge_ajax' %}",
+                    data: {
+                        "analyse_type": analyse_type,
+                        "id": "{{keyword_id}}",
+                        "start_date": "{{start_date}}",
+                        "end_date": "{{end_date}}"
+                    },
+                    success: function (response) {
+                        knowledge_graph_dict = response["knowledgegraph"];
+                        $("div#analysis-div").html('');
+                        $("div#analysis-div").append('<div id="knowledge-graph"></div>')
+                        
+                        var node_list = [];
+                        var edge_list = [];
+                        var added_node = [];
+                        var added_edge = [];
+
+                        for (var key in knowledge_graph_dict){
+                            for (var i = 0; i < knowledge_graph_dict[key][1].length; i++){
+                                triple = knowledge_graph_dict[key][1][i];
+                                
+                                if (!added_node.includes(triple[0])){
+                                    added_node.push(triple[0]);
+                                    node_list.push({id: triple[0], label: triple[0], shape: "box"});
+                                }
+                                if (!added_node.includes(triple[2])){
+                                    added_node.push(triple[2]);
+                                    node_list.push({id: triple[2], label: triple[2], shape: "box"});
+                                }
+                                
+                                if (!added_edge.includes(triple[0] + " - " + triple[2])){
+                                    added_edge.push(triple[0] + " - " + triple[2]);
+                                    edge_list.push({ from: triple[0], to: triple[2], label: triple[1], arrows: "to"});
+                                }
+                            }
+                        }
+
+                        // create an array with nodes
+                        var nodes = new vis.DataSet(node_list);
+
+                        // create an array with edges
+                        var edges = new vis.DataSet(edge_list);
+
+                        // create a network
+                        var container = document.getElementById("knowledge-graph");
+                        var data = {
+                            nodes: nodes,
+                            edges: edges,
+                        };
+                        var options = {};
+                        var network = new vis.Network(container, data, options);
+                        
+
+                        $("div#analysis-div").append(`
+                            <br/>
+                            <button type="button" class="btn btn-dark" id="tweet-table-button">Show extracted knowledge table</button>
+
+                            <table class="table" id="tweet-table" style="display:none;">
+                                <thead class="thead-dark">
+                                    <tr>
+                                        <th scope="col">ID</th>
+                                        <th scope="col">Tweet</th>
+                                        <th scope="col">Subject</th>
+                                        <th scope="col">Predicate</th>
+                                        <th scope="col">Object</th>
+                                        <th scope="col">Time</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                </tbody>
+                            </table>
+
+                            <br/><br/>
+                            <hr/>
+                            <h3>Use Cases</h3>
+                            <br/>
+
+                            <h4>Question answering:</h4>
+                            <div class="input-group mb-3">
+                                <input type="text" id="question-input" class="form-control" placeholder="Enter your question" aria-label="Recipient's username" aria-describedby="basic-addon2">
+                                <div class="input-group-append">
+                                    <button class="btn btn-outline-secondary" type="button" id="view-answer-button">View Answer</button>
+                                </div>
+                            </div>
+                            <div id="answer-div">
+                            </div>
+                        `);
+                        
+                        $.each(knowledge_graph_dict, function(key, val) {
+                            for(var i = 0; i < val[1].length; i++) {
+                                $("#tweet-table tbody").append(
+                                    '<tr>' +
+                                        '<th scope="row">' + key + '</th>' +
+                                        '<td style="word-wrap: break-word">' + val[0] + '</td>' +
+                                        '<td><button type="button" class="btn btn-light entity" id="' + val[1][i][3] + '" data-toggle="modal" data-target="#exampleModal">' + val[1][i][0] + '</button></td>' +
+                                        '<td>' + val[1][i][1] + '</td>' +
+                                        '<td><button type="button" class="btn btn-light entity" id="' + val[1][i][4] + '" data-toggle="modal" data-target="#exampleModal">' + val[1][i][2] + '</button></td>' +
+                                        '<td>' + val[2] + '</td>' +
+                                    '</tr>'
+                                );
+                            }
+                        });
+
+                        $("#tweet-table-button").click(function(){
+                            $("#tweet-table").slideToggle("slow");
+                        });
+                        
+                        
+                    },
+                    error: function (response) {
+                        alert(response["responseJSON"]["error"]);
+                    }
+                });
+            }
+
+            analyse("knowledgegraph");
+
+            $('body').on('click', 'button.entity', function(e) {
+                var entity = $(this).text();
+                var type = $(this).attr('id');
+
+                var graph_dict = new Object();
+                for (var key in knowledge_graph_dict){
+                    for (var i = 0; i < knowledge_graph_dict[key][1].length; i++){
+                        triple = knowledge_graph_dict[key][1][i];
+                        head_entity = triple[0];
+                        tail_entity = triple[2];
+                        rel = triple[1];
+
+                        if (head_entity == entity){
+                            graph_dict[rel.concat("_tail")] = tail_entity;
+                        }
+                        
+                        if (tail_entity == entity){
+                            graph_dict[rel.concat("_head")] = head_entity;
+                        }
+                    }
+                }
+                
+                var obj_encode = btoa(unescape(encodeURIComponent(JSON.stringify(graph_dict))));
+
+                url = "{% url 'knowledge_graph_linking' entity='entity' knowledge_graph='obj_encode'%}";
+                url = url.replace(/entity/, entity);
+                url = url.replace(/obj_encode/, obj_encode);
+                window.location.href = url;
+
+            });
+
+            $('body').on('click', 'button#view-answer-button', function(e) {
+                var question = $("#question-input").val();
+                console.log(question);
+
+                $.ajax({
+                    type: 'POST',
+                    url: "{% url 'question_answering_ajax' %}",
+                    data: {
+                        "question": question,
+                    },
+                    success: function (response) {
+                        var entities = response["entities"];
+                        var relations = response["relations"];
+                        console.log(entities);
+                        console.log(relations);
+                        var answer = "No answer found. Please enter another question.";
+                        var related_tweet = "";
+                        var is_break = false;
+                        
+                        for (var key in knowledge_graph_dict){
+                            for (var i = 0; i < knowledge_graph_dict[key][1].length; i++){
+
+                                var triple = knowledge_graph_dict[key][1][i];
+                                var head_entity = triple[0];
+                                var tail_entity = triple[2];
+                                var rel = triple[1];
+                                console.log(triple)
+                                
+                                var match_head_entity = false;
+                                var match_tail_entity = false;
+                                var match_relation = false;
+                                for (entity of entities){
+                                    if (head_entity.toLowerCase().includes(entity.toLowerCase())){
+                                        match_head_entity = true;
+                                    }
+                                    if (tail_entity.toLowerCase().includes(entity.toLowerCase())){
+                                        match_tail_entity = true;
+                                    }
+                                }
+
+                                for (relation of relations){
+                                    if (rel.toLowerCase().includes(relation.toLowerCase())){
+                                        match_relation = true;
+                                    }
+                                }
+
+                                if ((match_head_entity || match_tail_entity) && match_relation){
+                                    related_tweet = knowledge_graph_dict[key][0];
+                                    if (match_head_entity){
+                                        answer = tail_entity;
+                                    } else {
+                                        answer = head_entity;
+                                    }
+                                    is_break = true;
+                                }
+                                
+                                if (is_break) {
+                                    break;
+                                }
+                            }
+                            if (is_break) {
+                                break;
+                            }
+                        }
+
+                        $("#answer-div").html('');
+                        $("#answer-div").append(
+                            '<p><strong>Answer:</strong> ' + answer + '</p>' + 
+                            '<p><strong>Answer is extracted from tweet:</strong> ' + related_tweet + '</p>'
+                            );
+                    }
+                });
+            });
+
+        });
+    </script>
+</head>
+
+<div class="font-up-bold text-uppercase">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item">
+                <a class="" href="{% url 'system_management'%}">
+                    <h5 class="mr-3 mb-0"><strong>Keyword Management</strong></h5>
+                </a>
+            </li>
+            <li class="breadcrumb-item">
+                <a class="" href="{% url 'view_tweets' pk=keyword_id %}">
+                    <h5 class="mr-3 mb-0"><strong>View Tweets</strong></h5>
+                </a>
+            </li>
+            <li class="breadcrumb-item">
+                <a class="" href="{% url 'detect_event' pk=keyword_id start_date='None' end_date='None' %}">
+                    <h5 class="mr-3 mb-0"><strong>Event Detection</strong></h5>
+                </a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">
+                <h5 class="mr-3 mb-0"><strong>Event Knowledge</strong></h5>
+            </li>
+        </ol>
+    </nav>
+</div>
+
+<h3>Event knowledge graph</h3>
+<div id="analysis-div">
+    <div class="d-flex justify-content-center">
+        <div class="spinner-border" style="width: 100px; height: 100px;">
+            <span class="sr-only">Loading...</span>
+        </div>
+    </div>
+</div>
+
+
+{% endblock %}

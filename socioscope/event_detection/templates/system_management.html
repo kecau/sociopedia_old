@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<head>
+    <script type="text/javascript" language="javascript">
+        $(document).ready(function () {
+            $('button.btn-delete').bind('click', function (event) {
+                var keyword_id = $(this).attr("id");
+                
+                $.ajax({
+                    type: 'GET',
+                    url: "{% url 'delete_keyword' %}",
+                    data: {"keyword_id": keyword_id},
+                    dataType: 'json',
+                    success: function (response) {
+                        $('#tr-'.concat(keyword_id)).remove();
+                    },
+                    error: function (response) {
+                        alert(response);
+                    }
+                });
+            });
+
+            $('button.btn-stop').bind('click', function (event) {
+                var keyword_id = $(this).attr("id");
+                
+                $.ajax({
+                    type: 'GET',
+                    url: "{% url 'stop_streaming' %}",
+                    data: {"keyword_id": keyword_id},
+                    dataType: 'json',
+                    success: function (response) {
+                        $('#tr-'.concat(keyword_id).concat(" td#td-streaming")).text("Finished");
+                    },
+                    error: function (response) {
+                        alert(response);
+                    }
+                });
+            });
+        });
+    </script>
+</head>
+
+<div class="font-up-bold text-uppercase">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item active" aria-current="page">
+                <h5 class="mr-3 mb-0"><strong>Keyword Management</strong></h5>
+            </li>
+        </ol>
+    </nav>
+</div>
+
+<table class="table table-striped">
+    <thead class="thead-dark">
+        <tr>
+            <th scope="col">#</th>
+            <th scope="col">Keyword</th>
+            <th scope="col">Search Date</th>
+            <th scope="col">End Date</th>
+            <th scope="col">Status</th>
+            <th scope="col">Tweets</th>
+            <th scope="col">Handle</th>
+            <th scope="col">Delete</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for key in keywords %}
+        <div>
+            <tr id="tr-{{key.id}}">
+                <th scope="row">{{ forloop.counter }}</th>
+                <td><a href="{% url 'view_tweets' pk=key.pk %}">{{ key.keyword }}</a></td>
+                <td>{{ key.search_date }}</td>
+                <td>{{ key.end_date }}</td>
+                {% if key.is_streaming %}
+                    <td id="td-streaming">Running</td>
+                {% else %}
+                    <td id="td-streaming">Finished</td>
+                {% endif %}
+                <td>{{ key.n_tweets }}</td>
+                <td><button class="btn-stop" id="{{ key.id }}">Stop</button></td>
+                <td><button class="btn-delete" id="{{ key.id }}">Delete</button></td>
+            </tr>
+        </div>
+        {% endfor %}
+
+    </tbody>
+</table>
+
+{% endblock %}

@@ -1,0 +1,10 @@
+tweepy
+django
+pandas
+plotly
+wordcloud
+rest_framework
+nltk
+numpy
+matplotlib
+SPARQLWrapper

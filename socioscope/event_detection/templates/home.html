@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+
+    <div class="row">
+        <div class="col-md-12">
+            <h3>Welcome to SocioPedia System.</h3>
+            <br>
+            <br>
+            <p>This is a system for collecting data from Twitter. Analyzing events in Twitter, and extracting knowledge from these
+                events.</p>
+            <br>
+
+            <h5>Purposes:</h5>
+            <p>
+            
+            </p>
+            <br>
+
+            <h5>Technique:</h5>
+            <p>
+                This sytem is developed base on Django, PostgreSQL for database, Tweepy for streaming data...
+            </p>
+            <br>
+            
+            <h5>System Structure:</h5>
+            <br>
+            <img src="{% static 'event_detection/SocioPediaFlow.png' %}" class="img-fluid rounded mx-auto d-block"/>
+        </div>
+    </div>
+    
+{% endblock %}

@@ -1,0 +1,307 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<head>
+    <!-- XDSoft DateTimePicker -->
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/jquery-datetimepicker/2.5.20/jquery.datetimepicker.min.css"
+        integrity="sha256-DOS9W6NR+NFe1fUhEE0PGKY/fubbUCnOfTje2JMDw3Y=" crossorigin="anonymous" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-datetimepicker/2.5.20/jquery.datetimepicker.full.min.js"
+        integrity="sha256-FEqEelWI3WouFOo2VWP/uJfs1y8KJ++FLh2Lbqc8SJk=" crossorigin="anonymous"></script>
+        
+    <script>
+        $(document).ready(function () {
+            $("#id_start_date").datetimepicker({
+                format: 'Y-m-d H:i'
+            });
+            $("#id_end_date").datetimepicker({
+                format: 'Y-m-d H:i'
+            });
+
+            function load_tweet_distribution(time_option) {
+                $.ajax({
+                    type: 'POST',
+                    url: "{% url 'load_tweet_dist' %}",
+                    data: {
+                        "time_option": time_option,
+                        "id": "{{keyword_id}}",
+                    },
+                    success: function (response) {
+                        $("div#tweet-distribution").html(response["plot_div"]);
+                    },
+                    error: function (response) {
+                        alert(response["responseJSON"]["error"]);
+                    }
+                });
+            }
+
+            function reset_loading(button) {
+                $(".btn-group > .btn").removeClass("active");
+                $(button).addClass("active");
+                $("div#tweet-distribution").html(`
+                    <div class="d-flex justify-content-center">
+                        <div class="spinner-border" style="width: 100px; height: 100px;">
+                            <span class="sr-only">Loading...</span>
+                        </div>
+                    </div>
+                `);
+            }
+
+            load_tweet_distribution("hour");
+            $("button#btn-minute").click(function(){
+                reset_loading(this);
+                load_tweet_distribution("minute");
+            });
+            $("button#btn-hour").click(function() {
+                reset_loading(this);
+                load_tweet_distribution("hour");
+            });
+            $("button#btn-day").click(function() {
+                reset_loading(this);
+                load_tweet_distribution("day");
+            });
+            $("button#btn-month").click(function() {
+                reset_loading(this);
+                load_tweet_distribution("month");
+            });
+
+
+            var start_date = null;
+            var end_date = null;
+
+            function load_page(response) {
+                var tweets = JSON.parse(response["tweets"]);
+                var tweet_index = response["tweet_index"];
+                var page_range = response["page_range"];
+                var page_settings = response["page_settings"];
+
+                $("#tweet-table tbody").html('');
+
+                $.each(tweets, function (i, val) {
+                    var create_time = val.fields.created_at
+                    create_time = create_time.split("T")[0] + ", " + create_time.split("T")[1].split('Z')[0]
+                    create_time = create_time.replace("-", "/")
+                    create_time = create_time.replace("-", "/")
+
+                    $("#tweet-table tbody").append(
+                        '<tr>' +
+                        '<th scope="row">' + tweet_index[i] + '</th>' +
+                        '<td><a target="_blank" rel="noopener noreferrer" href="https://twitter.com/' + val.fields.user_id + '/status/' + val.fields.tweet_id + '">' + val.fields.tweet_id + '</a>' +
+                        '</td>' +
+                        '<td style="word-wrap: break-word">' + val.fields.text + '</td>' +
+                        '<td>' + create_time + '</td>' +
+                        '</tr>'
+                    )
+                });
+                
+                $("#paging").html('');
+                if (page_settings["has_other_pages"]){
+                    
+                    if (page_settings["has_previous"]){
+                        $("#paging").append('<li class="page-item"><a class="page-link" href="?page=' + page_settings['previous_page_number'] + '">&laquo;</a></li>');
+                    } else {
+                        $("#paging").append('<li class="page-item disabled"><span class="page-link">&laquo;</span></li>');
+                    }
+                    
+                    $.each(page_range, function(i, val) {
+                        if (val == -1) {
+                            $("#paging").append('<li class="page-item disabled"><span class="page-link">...</span></li>');
+                        } else {
+                            if (val == page_settings["number"]) {
+                                $("#paging").append('<li class="page-item active"><span class="page-link">' + val + '<span class="page-link sr-only">(current)</span></span></li>');
+                            } else {
+                                $("#paging").append('<li class="page-item"><a class="page-link" href="?page=' + val + '">' + val + '</a></li>');
+                            }
+                        }
+                    });
+
+                    if (page_settings["has_next"]) {
+                        $("#paging").append('<li class="page-item"><a class="page-link" href="?page=' + page_settings['next_page_number'] + '">&raquo;</a></li>');
+                    } else {
+                        $("#paging").append('<li class="page-item disabled"><span class="page-link">&raquo;</span></li>');
+                    }
+
+                }
+            }
+
+            $("#search-form").submit(function (e) {
+                e.preventDefault();
+                // var serializedData = $(this).serialize();
+                start_date = $("#id_start_date").val();
+                end_date = $("#id_end_date").val();
+                
+                var url = "{% url 'data_analysis' pk=keyword_id start_date='start_date_' end_date='end_date_' %}".replace(/keyword_id/, "{{keyword_id}}");
+                if (start_date) {
+                    url = url.replace(/start_date_/, start_date);
+                } else {
+                    url = url.replace(/start_date_/, "None");
+                }
+                if (end_date) {
+                    url = url.replace(/end_date_/, end_date);
+                } else {
+                    url = url.replace(/end_date_/, "None");
+                }
+                $("a#analyse-tweet").attr("href", url);
+
+                $.ajax({
+                    type: 'POST',
+                    url: "{% url 'filter_tweets_intime' %}",
+                    data: { 
+                        "page_n": 1,
+                        "id": "{{keyword_id}}", 
+                        "start_date": start_date, 
+                        "end_date": end_date 
+                    },
+                    success: function (response) {
+                        load_page(response);
+                    },
+                    error: function (response) {
+                        alert(response["responseJSON"]["error"]);
+                    }
+                });
+            });
+
+            $('body').on('click', 'a.page-link', function(e) {
+                e.preventDefault();
+
+                var page_n = $(this).attr('href');
+                page_n = page_n.split("=")[1];
+                
+                $.ajax({
+                    type: "POST",
+                    url: "{% url 'filter_tweets_intime' %}",
+                    data: {
+                        "page_n": page_n,
+                        "id": "{{keyword_id}}", 
+                        "start_date": start_date, 
+                        "end_date": end_date 
+                    },
+                    success: function (response) {
+                        load_page(response);
+                    },
+                    error: function (response) {
+                        alert(response["responseJSON"]["error"]);
+                    }
+                });
+            });
+        });
+    </script>
+</head>
+
+{% load list_index %}
+
+<div class="font-up-bold text-uppercase">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item">
+                <a class="" href="{% url 'system_management'%}">
+                    <h5 class="mr-3 mb-0"><strong>Keyword Management</strong></h5>
+                </a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">
+                <h5 class="mr-3 mb-0"><strong>View Tweets</strong></h5>
+            </li>
+        </ol>
+    </nav>
+</div>
+
+<h3>Tweets in time distribution:</h3>
+<div class="btn-group" role="group" aria-label="Basic example">
+    <button type="button" id="btn-minute" class="btn btn-outline-secondary">By Minute</button>
+    <button type="button" id="btn-hour" class="btn btn-outline-secondary active">By Hour</button>
+    <button type="button" id="btn-day" class="btn btn-outline-secondary">By Day</button>
+    <button type="button" id="btn-month" class="btn btn-outline-secondary">By Month</button>
+</div>
+<br />
+<div class="row">
+    <div class="col-md-12" id="tweet-distribution">
+        <div class="d-flex justify-content-center">
+            <div class="spinner-border" style="width: 100px; height: 100px;">
+                <span class="sr-only">Loading...</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<br>
+
+<div>
+    <h3>Select time range:</h3>
+    <form method="POST" id="search-form" class="post-form" autocomplete="off" novalidate>
+        {% csrf_token %}
+        <div class="row">
+            {% for field in form %}
+            <div class="form-group col-6">
+                <label class="col-4">{{ field.label }}</label>
+                {{ field }}
+            </div>
+            {% endfor %}
+        </div>
+        <button type="submit" class="btn btn-primary">Show tweets</button>
+    </form>
+</div>
+
+<br>
+<div>
+    <h3>View tweets:</h3>
+    <table class="table" id="tweet-table">
+        <thead class="thead-dark">
+            <tr>
+                <th scope="col">#</th>
+                <th scope="col">Tweet ID</th>
+                <th scope="col">Tweet</th>
+                <th scope="col">Create Time</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for tweet in tweets %}
+                <tr>
+                    <th scope="row">{{ tweet_index|index:forloop.counter0 }}</th>
+                    <td><a target="_blank" rel="noopener noreferrer"
+                            href="https://twitter.com/{{ tweet.user_id }}/status/{{ tweet.tweet_id }}">{{ tweet.tweet_id }}</a>
+                    </td>
+                    <td style="word-wrap: break-word">{{ tweet.text }}</td>
+                    <td>{{ tweet.created_at_str }}</td>
+                </tr>
+            {% endfor %}
+
+        </tbody>
+    </table>
+
+
+    {% if page_settings.has_other_pages %}
+    <ul class="pagination flex-wrap justify-content-center" id="paging">
+        {% if page_settings.has_previous %}
+        <li class="page-item"><a class="page-link" href="?page={{ page_settings.previous_page_number }}">&laquo;</a></li>
+        {% else %}
+        <li class="page-item disabled"><span class="page-link">&laquo;</span></li>
+        {% endif %}
+
+        {% for i in page_range %}
+        {% if i == -1 %}
+        <li class="page-item disabled"><span class="page-link">...</span></li>
+        {% else %}
+        {% if page_settings.number == i %}
+        <li class="page-item active"><span class="page-link">{{ i }} <span
+                    class="page-link sr-only">(current)</span></span></li>
+        {% else %}
+        <li class="page-item"><a class="page-link" href="?page={{ i }}">{{ i }}</a></li>
+        {% endif %}
+        {% endif %}
+        {% endfor %}
+
+        {% if page_settings.has_next %}
+        <li class="page-item"><a class="page-link" href="?page={{ page_settings.next_page_number }}">&raquo;</a></li>
+        {% else %}
+        <li class="page-item disabled"><span class="page-link">&raquo;</span></li>
+        {% endif %}
+    </ul>
+    {% endif %}
+</div>
+
+<div>
+    <a class="btn btn-primary" id="analyse-tweet" role="button" href="{% url 'data_analysis' pk=keyword_id start_date='None' end_date='None' %}">Analyse Tweets</a>
+    <a class="btn btn-primary" id="detect-event" role="button" href="{% url 'detect_event' pk=keyword_id start_date='None' end_date='None' %}">Detect Events</a>
+
+</div>
+{% endblock %}

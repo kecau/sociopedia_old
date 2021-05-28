@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load list_index %}
+
+{% block content %}
+<head>
+    <script
+        type="text/javascript"
+        src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js">
+    </script>
+
+    <style type="text/css">
+        #knowledge-graph {
+        width: 100%;
+        height: 800px;
+        border: 1px solid lightgray;
+        }
+    </style>
+
+    <script>
+        $(document).ready(function () {
+            var knowledge_graph = {{knowledge_graph | js}};
+
+            var node_list = [];
+            var edge_list = [];
+            var added_node = [];
+
+            for (var i = 0; i < knowledge_graph.length; i++){
+                if (!added_node.includes(knowledge_graph[i][0])){
+                    added_node.push(knowledge_graph[i][0]);
+                    if (knowledge_graph[i][3] == 'dbpedia') {
+                        node_list.push({id: knowledge_graph[i][0], label: knowledge_graph[i][0], shape: "box", color: "red"});
+                    } else {
+                        node_list.push({id: knowledge_graph[i][0], label: knowledge_graph[i][0], shape: "box"});
+                    }
+                }
+
+                if (!added_node.includes(knowledge_graph[i][2])){
+                    added_node.push(knowledge_graph[i][2]);
+                    if (knowledge_graph[i][3] == 'dbpedia') {
+                        node_list.push({id: knowledge_graph[i][2], label: knowledge_graph[i][2], shape: "box", color: "red"});
+                    } else {
+                        node_list.push({id: knowledge_graph[i][2], label: knowledge_graph[i][2], shape: "box"});
+                    }
+                }
+                if (knowledge_graph[i][3] == 'dbpedia') {
+                    edge_list.push({from: knowledge_graph[i][0], to: knowledge_graph[i][2], label: knowledge_graph[i][1], arrows: "to", color: "red"});
+                } else {
+                    edge_list.push({from: knowledge_graph[i][0], to: knowledge_graph[i][2], label: knowledge_graph[i][1], arrows: "to"});
+                }
+            }
+
+            // create an array with nodes
+            var nodes = new vis.DataSet(node_list);
+
+            // create an array with edges
+            var edges = new vis.DataSet(edge_list);
+
+            // create a network
+            var container = document.getElementById("knowledge-graph");
+            var data = {
+                nodes: nodes,
+                edges: edges,
+            };
+            var options = {};
+            var network = new vis.Network(container, data, options);
+
+            var entity = {{entity | js}};
+            var dbpedia_graph = {{dbpedia_graph | js}};
+            console.log(dbpedia_graph);
+
+            $("#triple-table tbody").html('');
+            
+            index = 1;
+            $.each(dbpedia_graph, function (key, val) {
+                $("#triple-table tbody").append(
+                    '<tr>' +
+                    '<th scope="row">' + index + '</th>' +
+                    '<td>' + entity + '</td>' +
+                    '<td>' + key + '</td>' +
+                    '<td>' + val + '</td>' +
+                    '</tr>'
+                )
+                index++;
+            });
+        });
+    </script>
+</head>
+
+<h3>Linking knowledge graph:</h3>
+
+<div id="knowledge-graph"></div>
+
+<h4>DBpedia knowledge</h4>
+<table class="table" id="triple-table">
+    <thead class="thead-dark">
+        <tr>
+            <th scope="col">#</th>
+            <th scope="col">Entity</th>
+            <th scope="col">Predicate</th>
+            <th scope="col">Object</th>
+        </tr>
+    </thead>
+    <tbody>
+
+    </tbody>
+</table>
+
+{% endblock %}

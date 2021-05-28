@@ -1,0 +1,248 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<head>
+    <script src="{% static 'event_detection/jquery.prettytag.js' %}"></script>
+    <link rel="stylesheet" href="{% static 'event_detection/prettytag.css' %}">
+
+    <style type="text/css">
+        #knowledge-graph {
+        width: 100%;
+        height: 700px;
+        border: 1px solid lightgray;
+        }
+    </style>
+
+    <script>
+        $(document).ready(function () {
+            
+            function load_keyword(){
+                $.ajax({
+                    type: 'POST',
+                    url: "{% url 'load_keyword_ajax' %}",
+                    data: {
+                        "id": "{{keyword_id}}",
+                        "start_date": "{{start_date}}",
+                        "end_date": "{{end_date}}"
+                    },
+                    success: function (response) {
+                        var keywords = response["keywords"];
+                        var dbpedia_keywords = response["dbpedia_keywords"];
+
+                        $("div#analysis-div").html('');
+                        $("div#analysis-div").append(
+                            '<h5>Suggest extracted topics:</h5>' +
+                            '<ul class="cloud-tags" id="cloudtags1">' + 
+                            '</ul>' +
+                            '<h5>Suggest DBpedia topics:</h5>' +
+                            '<ul class="cloud-tags" id="cloudtags2">' + 
+                            '</ul>'
+                        );
+
+                        for(var i = 0; i < keywords.length; i++){
+                            $("ul#cloudtags1").append(
+                                '<li><a href="" class="keyword-filter" id="' + keywords[i] + '">' + keywords[i] + '</a></li>'
+                            );
+                        };
+
+                        for(var i = 0; i < dbpedia_keywords.length; i++){
+                            $("ul#cloudtags2").append(
+                                '<li><a href="" class="keyword-filter" id="' + dbpedia_keywords[i] + '">' + dbpedia_keywords[i] + '</a></li>'
+                            );
+                        };
+
+                        $("div#analysis-div").append(
+                            '<div id="event-result"></div>'
+                        );
+
+                        $(".cloud-tags").prettyTag({
+                            tagicon: false,
+                        });
+                    },
+                    error: function (response) {
+                        alert(response["responseJSON"]["error"]);
+                    }
+                });
+            }
+
+            function extract_event(filter_key){
+                $.ajax({
+                    type: 'POST',
+                    url: "{% url 'detect_event_ajax' %}",
+                    data: {
+                        "id": "{{keyword_id}}",
+                        "start_date": "{{start_date}}",
+                        "end_date": "{{end_date}}",
+                        "filter_key": filter_key
+                    },
+                    success: function (response) {
+                        console.log('extract event');
+                        var plot_div = response["plot_div"];
+                        var event_plot_div = response["event_plot_div"];
+                        var events = response["events"];
+
+                        $("div#event-result").html('');
+                        $("div#event-result").append(
+                            '<h3>Event Proportion:</h3>' +
+                            '<div class="row">' +
+                                '<div class="col-md-12" id="tweet-distribution">' +
+                                    plot_div + 
+                                '</div>' +
+                            '</div>' + 
+
+                            '<h3>Detect Events:</h3>' +
+                            '<div class="row">' +
+                                '<div class="col-md-12" id="detect-event">' +
+                                    event_plot_div +
+                                '</div>' +
+                            '</div>' +
+
+                            '<h3>Event List:</h3>' +
+
+                            '<table class="table" id="event-table">' +
+                                '<thead class="thead-dark">' +
+                                    '<tr>' +
+                                        '<th scope="col">#</th>' +
+                                        '<th scope="col">Event start time</th>' +
+                                        '<th scope="col">Event end time</th>' +
+                                        '<th scope="col">Event knowledge</th>' +
+                                    '</tr>' +
+                                '</thead>' +
+                                '<tbody>' +
+                                '</tbody>' +
+                            '</table>'
+                        );
+                        
+                        if (events.length == 0){
+                            $("div#event-result").append(
+                                '<h5 style="text-align:center">There is no event happen during the time period of streaming data.</h5>' +
+                                '<h5 style="text-align:center">Keeping streaming data to catch newest events.</h5>'
+                            );
+                        } else {
+                            for(var i = 0; i < events.length; i++){
+                                event_url = "{% url 'event_knowledge' pk=keyword_id start_date='start_date' end_date='end_date' %}";
+                                event_url = event_url.replace(/start_date/, events[i][0]);
+                                event_url = event_url.replace(/end_date/, events[i][1]);
+                                
+                                $("#event-table tbody").append(
+                                    '<tr>' +
+                                        '<th scope="row">' + i + '</th>' +
+                                        '<td>' + events[i][0] + '</td>' +
+                                        '<td>' + events[i][1] + '</td>' +
+                                        '<td><a class="btn btn-primary" role="button" href="' + event_url + '">View KG</a></td>' +
+                                    '</tr>'
+                                );
+                            }
+                        }
+                    },
+                    error: function (response) {
+                        alert(response["responseJSON"]["error"]);
+                    }
+                });
+            }
+
+            
+            load_keyword();
+            // extract_event();
+            
+            $('body').on('click', 'a.keyword-filter', function(e) {
+                e.preventDefault();
+                var filter_key = $(this).attr('id');
+                
+                $("div#event-result").html(`
+                    <div class="d-flex justify-content-center">
+                        <div class="spinner-border" style="width: 100px; height: 100px;">
+                            <span class="sr-only">Loading...</span>
+                        </div>
+                    </div>
+                `);
+                extract_event(filter_key);
+                
+            });
+        });
+    </script>
+
+</head>
+
+<div class="font-up-bold text-uppercase">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item">
+                <a class="" href="{% url 'system_management'%}">
+                    <h5 class="mr-3 mb-0"><strong>Keyword Management</strong></h5>
+                </a>
+            </li>
+            <li class="breadcrumb-item">
+                <a class="" href="{% url 'view_tweets' pk=keyword_id %}">
+                    <h5 class="mr-3 mb-0"><strong>View Tweets</strong></h5>
+                </a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">
+                <h5 class="mr-3 mb-0"><strong>Event Detection</strong></h5>
+            </li>
+        </ol>
+    </nav>
+</div>
+
+<h3>Select a topic:</h3>
+
+<div id="analysis-div">
+    <div class="d-flex justify-content-center">
+        <div class="spinner-border" style="width: 100px; height: 100px;">
+            <span class="sr-only">Loading...</span>
+        </div>
+    </div>
+</div>
+
+<!-- <h3>Event Proportion:</h3>
+
+<div id="analysis-div">
+    <div class="d-flex justify-content-center">
+        <div class="spinner-border" style="width: 100px; height: 100px;">
+            <span class="sr-only">Loading...</span>
+        </div>
+    </div>
+</div> -->
+
+
+<!-- <div class="row">
+    <div class="col-md-12" id="tweet-distribution">
+        {{ plot_div|safe }}
+    </div>
+</div>
+
+<h3>Detect Events:</h3>
+<div class="row">
+    <div class="col-md-12" id="detect-event">
+        {{ event_plot_div|safe }}
+    </div>
+</div>
+
+<h3>Event List:</h3>
+
+<table class="table">
+    <thead class="thead-dark">
+        <tr>
+            <th scope="col">#</th>
+            <th scope="col">Start time</th>
+            <th scope="col">End time</th>
+            <th scope="col">Knowledge</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for event in events %}
+        <div>
+            <tr>
+                <th scope="row">{{ forloop.counter }}</th>
+                <td>{{ event.0 }}</td>
+                <td>{{ event.1 }}</td>
+                <td><a class="btn btn-primary" role="button" href="{% url 'event_knowledge' pk=keyword_id start_date=event.0 end_date=event.1 %}">View KG</a></td>
+            </tr>
+        </div>
+        {% endfor %}
+
+    </tbody>
+</table> -->
+
+{% endblock %}
